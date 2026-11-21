@@ -1,0 +1,96 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { regenerateInviteCode } from "./actions";
+import { TopBar } from "@/components/shell";
+import { Card, Empty } from "@/components/ui";
+import { requireUser } from "@/lib/session";
+import { getRoster } from "@/lib/queries";
+import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
+
+export default async function Home() {
+  const user = await requireUser();
+  if (user.role === "client") redirect(`/clients/${user.id}`);
+
+  const roster = await getRoster(user.id);
+  const waiting = roster.filter((r) => r.needsFeedback).length;
+
+  return (
+    <>
+      <TopBar user={user} />
+      <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold">Clients</h1>
+            <p className="text-sm text-muted">
+              {roster.length} client{roster.length === 1 ? "" : "s"}
+              {waiting > 0 && ` · ${waiting} check-in${waiting === 1 ? "" : "s"} waiting for feedback`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm">
+            <span className="text-muted">Invite code</span>
+            <code className="font-mono font-semibold tracking-wider">{user.inviteCode}</code>
+            <form action={regenerateInviteCode}>
+              <button className="text-xs text-muted underline hover:text-text" title="Old code stops working">
+                New code
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {roster.length === 0 ? (
+          <Card>
+            <Empty>
+              No clients yet. Share your invite code above; clients enter it when they sign up and appear here.
+            </Empty>
+          </Card>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 text-left text-xs text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Client</th>
+                  <th className="px-4 py-2 font-medium">Last check-in</th>
+                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Weight</th>
+                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Change</th>
+                  <th className="hidden px-4 py-2 text-right font-medium md:table-cell">Avg steps (7d)</th>
+                  <th className="hidden px-4 py-2 text-right font-medium md:table-cell">Days logged (7d)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map((r) => (
+                  <tr key={r.client.id} className="border-t border-border hover:bg-surface-2/60">
+                    <td className="px-4 py-3">
+                      <Link href={`/clients/${r.client.id}`} className="font-medium hover:text-accent">
+                        {r.client.name}
+                      </Link>
+                      <div className="text-xs text-muted">{r.client.email}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.lastCheckin ? fmtDate(r.lastCheckin.date) : <span className="text-muted">None yet</span>}
+                      {r.needsFeedback && (
+                        <Link
+                          href={`/clients/${r.client.id}/checkins`}
+                          className="ml-2 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
+                        >
+                          Needs feedback
+                        </Link>
+                      )}
+                    </td>
+                    <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
+                      {r.lastCheckin?.weightKg != null ? `${fmtNum(r.lastCheckin.weightKg)} kg` : "–"}
+                    </td>
+                    <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
+                      {r.weightChange != null ? `${fmtDelta(r.weightChange)} kg` : "–"}
+                    </td>
+                    <td className="hidden px-4 py-3 text-right tabular-nums md:table-cell">{fmtNum(r.avgSteps)}</td>
+                    <td className="hidden px-4 py-3 text-right tabular-nums md:table-cell">{r.daysLogged}/7</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
