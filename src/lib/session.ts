@@ -50,9 +50,14 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 }
 
-export async function requireUser(): Promise<User> {
+/**
+ * The signed-in user, or a redirect to login. Someone with a temporary password
+ * is sent to the account page to choose a new one before using the app.
+ */
+export async function requireUser(opts?: { allowTemporaryPassword?: boolean }): Promise<User> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword && !opts?.allowTemporaryPassword) redirect("/account");
   return user;
 }
 

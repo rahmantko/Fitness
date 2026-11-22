@@ -12,9 +12,12 @@ export function TopBar({ user }: { user: User }) {
           Checkpoint
         </Link>
         <div className="flex items-center gap-3 text-sm">
-          <span className="hidden text-muted sm:inline">
-            {user.name} · <span className="capitalize">{user.role}</span>
-          </span>
+          <Link href="/account" className="text-muted hover:text-text">
+            <span className="hidden sm:inline">
+              {user.name} · <span className="capitalize">{user.role}</span>
+            </span>
+            <span className="sm:hidden">Account</span>
+          </Link>
           <form action={logout}>
             <button className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">Log out</button>
           </form>

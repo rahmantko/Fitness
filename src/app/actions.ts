@@ -1,7 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
@@ -327,3 +327,48 @@ export async function regenerateInviteCode() {
   revalidatePath("/");
 }
 
+
+// ---------- Passwords ----------
+
+/** Readable temporary password, e.g. "kite-4827-mango". */
+function temporaryPassword() {
+  const words = ["apple", "bison", "cedar", "delta", "ember", "fjord", "grape", "heron", "igloo", "jolly", "kite", "lemon", "mango", "noble", "olive", "pearl", "quail", "raven", "sage", "tiger", "umber", "viola", "willow", "yarrow", "zebra"];
+  const w = () => words[randomInt(words.length)];
+  return `${w()}-${randomInt(1000, 10000)}-${w()}`;
+}
+
+export async function changePassword(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser({ allowTemporaryPassword: true });
+  const current = String(form.get("current") ?? "");
+  const next = String(form.get("password") ?? "");
+  const confirm = String(form.get("confirm") ?? "");
+  if (!(await bcrypt.compare(current, user.passwordHash))) return { error: "Your current password is incorrect." };
+  if (next.length < 8) return { error: "Your new password must be at least 8 characters." };
+  if (next !== confirm) return { error: "The new passwords don't match." };
+  if (next === current) return { error: "Choose a password different from the current one." };
+  const db = await getDb();
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false })
+    .where(eq(users.id, user.id));
+  if (user.mustChangePassword) redirect("/");
+  return { ok: "Password changed." };
+}
+
+export type ResetState = { error?: string; tempPassword?: string } | undefined;
+
+/** Coach gives a client a temporary password; the client must change it after logging in. */
+export async function resetClientPassword(_: ResetState, form: FormData): Promise<ResetState> {
+  const clientId = String(form.get("clientId"));
+  const coach = await requireUser();
+  if (coach.role !== "coach") return { error: "Only coaches can reset passwords." };
+  const client = await getViewableClient(coach, clientId);
+  if (!client) return { error: "Client not found." };
+  const tempPassword = temporaryPassword();
+  const db = await getDb();
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true })
+    .where(and(eq(users.id, client.id), eq(users.coachId, coach.id)));
+  return { tempPassword };
+}

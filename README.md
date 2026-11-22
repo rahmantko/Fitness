@@ -33,6 +33,7 @@ Without `DATABASE_URL`, the app uses an embedded Postgres (PGlite) stored in `./
 | Compare | Any two check-ins side by side: photos per pose and the change in every measurement. |
 | Training | Log sessions set by set (reps, kg, RPE), with history, volume and best sets. |
 | Blood work | Upload the lab report and enter markers with reference ranges. Out-of-range values are flagged and repeated markers are charted. |
+| Passwords | Everyone can change their password on the Account page. Coaches can reset a client's password from the client's Overview and get a temporary one to send them; it must be changed at the next login. |
 | Coach dashboard | Roster with last check-in, weight change, average steps, logging consistency and check-ins waiting for feedback. |
 
 Photos and lab reports are never public. They are served through `/api/files/...` only to the client who owns them and their coach.
@@ -50,6 +51,16 @@ The app applies database migrations itself when it starts (`npm run db:migrate` 
 The camera scanner needs the site to be served over HTTPS (or localhost). Barcode lookups call `world.openfoodfacts.org` from the server, so that host must be reachable.
 
 File storage writes to local disk (`src/lib/storage.ts`). On serverless hosting, swap that module for Supabase Storage or S3.
+
+## Locked out?
+
+If a coach forgets their password, run this where the app is deployed (on Railway: open the app service, then the **Console** tab):
+
+```bash
+npm run reset-password -- you@example.com
+```
+
+It prints a temporary password; log in with it and choose a new one.
 
 ## Database changes
 

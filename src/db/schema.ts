@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgTable,
   text,
   integer,
@@ -23,6 +24,8 @@ export const users = pgTable("users", {
   // Clients belong to one coach. Coaches have an invite code clients sign up with.
   coachId: uuid("coach_id"),
   inviteCode: text("invite_code").unique(),
+  // Set after a coach (or the recovery command) gives out a temporary password.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

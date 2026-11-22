@@ -4,6 +4,8 @@ import { fillDays, getCheckins, getDailyLogs, getTargets } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum, today } from "@/lib/format";
 import { ButtonLink, Card, Empty, Stat } from "@/components/ui";
 import { DailyLogForm, TargetsForm } from "@/components/forms";
+import { ResetClientPassword } from "@/components/password-forms";
+import { getViewableClient } from "@/lib/session";
 import { DailyBars, TrendLine } from "@/components/charts";
 
 function avg(xs: (number | null)[]) {
@@ -108,9 +110,14 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
       </Card>
 
       {viewer.role === "coach" ? (
-        <Card title="Targets">
-          <TargetsForm clientId={id} t={t ?? undefined} />
-        </Card>
+        <>
+          <Card title="Targets">
+            <TargetsForm clientId={id} t={t ?? undefined} />
+          </Card>
+          <Card title="Login help">
+            <ResetClientPassword clientId={id} clientName={(await getViewableClient(viewer, id))?.name ?? "This client"} />
+          </Card>
+        </>
       ) : (
         t && (
           <Card title="Your targets">
