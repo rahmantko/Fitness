@@ -23,7 +23,7 @@ const temp = `${w()}-${randomInt(1000, 10000)}-${w()}`;
 const sql = postgres(process.env.DATABASE_URL, { prepare: false });
 try {
   const rows = await sql`
-    update users set password_hash = ${await bcrypt.hash(temp, 10)}, must_change_password = true
+    update users set password_hash = ${await bcrypt.hash(temp, 10)}, must_change_password = true, password_changed_at = now()
     where lower(email) = ${email} returning name`;
   if (rows.length === 0) {
     console.error(`No account found for ${email}.`);

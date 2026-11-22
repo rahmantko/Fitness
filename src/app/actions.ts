@@ -1,10 +1,12 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
+import { headers } from "next/headers";
+import { appUrl, sendEmail } from "@/lib/email";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   users,
@@ -16,12 +18,13 @@ import {
   workoutSets,
   bloodTests,
   bloodMarkers,
+  passwordResets,
 } from "@/db/schema";
 import { createSession, destroySession, requireUser, getViewableClient } from "@/lib/session";
 import { saveFile } from "@/lib/storage";
 import { int, isIsoDate, num, str } from "@/lib/format";
 
-export type FormState = { error?: string; ok?: string } | undefined;
+export type FormState = { error?: string; ok?: string; email?: string } | undefined;
 
 // ---------- Auth ----------
 
@@ -67,7 +70,7 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
   const db = await getDb();
   const [user] = await db.select().from(users).where(eq(users.email, email));
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return { error: "Email or password is incorrect." };
+    return { error: "Email or password is incorrect.", email };
   }
   await createSession(user.id);
   redirect("/");
@@ -349,8 +352,10 @@ export async function changePassword(_: FormState, form: FormData): Promise<Form
   const db = await getDb();
   await db
     .update(users)
-    .set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false })
+    .set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false, passwordChangedAt: new Date() })
     .where(eq(users.id, user.id));
+  // Other devices are signed out; keep this one signed in.
+  await createSession(user.id);
   if (user.mustChangePassword) redirect("/");
   return { ok: "Password changed." };
 }
@@ -368,7 +373,89 @@ export async function resetClientPassword(_: ResetState, form: FormData): Promis
   const db = await getDb();
   await db
     .update(users)
-    .set({ passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true })
+    .set({ passwordHash: await bcrypt.hash(tempPassword, 10), mustChangePassword: true, passwordChangedAt: new Date() })
     .where(and(eq(users.id, client.id), eq(users.coachId, coach.id)));
   return { tempPassword };
+}
+
+// ---------- Forgot password (email link) ----------
+
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
+
+export async function requestPasswordReset(_: FormState, form: FormData): Promise<FormState> {
+  const email = str(form.get("email"))?.toLowerCase();
+  if (!email || !email.includes("@")) return { error: "Enter your email address." };
+  // Same answer whether or not the account exists, so the form can't be used to find accounts.
+  const done: FormState = {
+    ok: "If there's an account for that email, we've sent a link to reset the password. It works for 1 hour. Check your spam folder if it doesn't arrive.",
+  };
+  const db = await getDb();
+  const [user] = await db.select().from(users).where(eq(users.email, email));
+  if (!user) return done;
+
+  // At most 3 emails per account per hour.
+  const recent = await db
+    .select({ id: passwordResets.id })
+    .from(passwordResets)
+    .where(and(eq(passwordResets.userId, user.id), gt(passwordResets.createdAt, new Date(Date.now() - RESET_TTL_MS))));
+  if (recent.length >= 3) return done;
+
+  const token = randomBytes(32).toString("base64url");
+  await db.insert(passwordResets).values({
+    userId: user.id,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + RESET_TTL_MS),
+  });
+  const h = await headers();
+  const link = `${appUrl(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"))}/reset-password?token=${token}`;
+  await sendEmail({
+    to: user.email,
+    subject: "Reset your Checkpoint password",
+    text: `Hi ${user.name},\n\nSomeone (hopefully you) asked to reset the password for your Checkpoint account.\n\nChoose a new password here: ${link}\n\nThis link works once and expires in 1 hour. If you didn't ask for this, you can ignore this email and your password stays the same.`,
+    html: `<p>Hi ${escapeHtml(user.name)},</p><p>Someone (hopefully you) asked to reset the password for your Checkpoint account.</p><p><a href="${link}" style="display:inline-block;padding:10px 16px;background:#2f6f4f;color:#fff;border-radius:8px;text-decoration:none">Choose a new password</a></p><p style="color:#5f665f;font-size:13px">This link works once and expires in 1 hour. If you didn't ask for this, ignore this email and your password stays the same.</p>`,
+  });
+  return done;
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Checks a reset link without using it up (for showing the form or an "expired" message). */
+export async function isResetTokenValid(token: string) {
+  if (!token || token.length > 100) return false;
+  const db = await getDb();
+  const [row] = await db
+    .select({ id: passwordResets.id })
+    .from(passwordResets)
+    .where(and(eq(passwordResets.tokenHash, hashToken(token)), isNull(passwordResets.usedAt), gt(passwordResets.expiresAt, new Date())));
+  return !!row;
+}
+
+export async function resetPasswordWithToken(_: FormState, form: FormData): Promise<FormState> {
+  const token = String(form.get("token") ?? "");
+  const next = String(form.get("password") ?? "");
+  const confirm = String(form.get("confirm") ?? "");
+  if (next.length < 8) return { error: "Your new password must be at least 8 characters." };
+  if (next !== confirm) return { error: "The passwords don't match." };
+  const db = await getDb();
+  // Mark the link used in the same step that checks it, so it can only ever work once.
+  const [row] = await db
+    .update(passwordResets)
+    .set({ usedAt: new Date() })
+    .where(and(eq(passwordResets.tokenHash, hashToken(token)), isNull(passwordResets.usedAt), gt(passwordResets.expiresAt, new Date())))
+    .returning();
+  if (!row) return { error: "This reset link has expired or was already used. Request a new one." };
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false, passwordChangedAt: new Date() })
+    .where(eq(users.id, row.userId));
+  // Any other outstanding links for this account stop working too.
+  await db
+    .update(passwordResets)
+    .set({ usedAt: new Date() })
+    .where(and(eq(passwordResets.userId, row.userId), isNull(passwordResets.usedAt)));
+  await createSession(row.userId);
+  redirect("/");
 }

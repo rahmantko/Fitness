@@ -26,6 +26,8 @@ export const users = pgTable("users", {
   inviteCode: text("invite_code").unique(),
   // Set after a coach (or the recovery command) gives out a temporary password.
   mustChangePassword: boolean("must_change_password").notNull().default(false),
+  // Logins made before this moment are signed out (set whenever the password changes).
+  passwordChangedAt: timestamp("password_changed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -292,3 +294,19 @@ export const cardioLogs = pgTable(
 
 export type Food = typeof foods.$inferSelect;
 export type DayType = (typeof dayTypeEnum.enumValues)[number];
+
+// One-time "forgot password" links. Only a hash of the token is stored.
+export const passwordResets = pgTable(
+  "password_resets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("password_resets_user").on(t.userId)],
+);

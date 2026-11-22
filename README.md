@@ -52,6 +52,16 @@ The camera scanner needs the site to be served over HTTPS (or localhost). Barcod
 
 File storage writes to local disk (`src/lib/storage.ts`). On serverless hosting, swap that module for Supabase Storage or S3.
 
+## Password reset emails
+
+"Forgot password?" on the login page emails a one-time link (valid for 1 hour). Emails are sent with [Resend](https://resend.com):
+
+| Variable | What to put |
+| --- | --- |
+| `RESEND_API_KEY` | API key from Resend. Without it, reset emails are printed to the server log instead of sent. |
+| `EMAIL_FROM` | Sender, e.g. `Checkpoint <hello@yourdomain.com>`. The domain must be verified in Resend. Until then Resend only delivers to your own Resend account email. |
+| `APP_URL` | Optional. The site address used in links; on Railway it's detected automatically. |
+
 ## Locked out?
 
 If a coach forgets their password, run this where the app is deployed (on Railway: open the app service, then the **Console** tab):

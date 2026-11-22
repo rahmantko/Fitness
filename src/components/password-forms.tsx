@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { changePassword, resetClientPassword } from "@/app/actions";
+import { changePassword, requestPasswordReset, resetClientPassword, resetPasswordWithToken } from "@/app/actions";
 import { Field, inputCls } from "./ui";
 
 function Submit({ children }: { children: React.ReactNode }) {
@@ -77,6 +77,38 @@ export function ResetClientPassword({ clientId, clientName }: { clientId: string
       </p>
       {state?.error && <p className="text-danger">{state.error}</p>}
       <button className="rounded-lg border border-border px-3 py-2 font-medium hover:bg-surface-2">Reset password</button>
+    </form>
+  );
+}
+
+export function ForgotPasswordForm() {
+  const [state, action] = useActionState(requestPasswordReset, undefined);
+  if (state?.ok) return <p className="text-sm">{state.ok}</p>;
+  return (
+    <form action={action} className="space-y-4">
+      <p className="text-sm text-muted">Enter the email you signed up with and we&apos;ll send you a link to choose a new password.</p>
+      <Field label="Email">
+        <input name="email" type="email" required autoComplete="email" className={inputCls} />
+      </Field>
+      {state?.error && <p className="text-sm text-danger">{state.error}</p>}
+      <Submit>Send reset link</Submit>
+    </form>
+  );
+}
+
+export function NewPasswordForm({ token }: { token: string }) {
+  const [state, action] = useActionState(resetPasswordWithToken, undefined);
+  return (
+    <form action={action} className="space-y-4">
+      <input type="hidden" name="token" value={token} />
+      <Field label="New password" hint="At least 8 characters">
+        <input name="password" type="password" required minLength={8} autoComplete="new-password" className={inputCls} />
+      </Field>
+      <Field label="Confirm new password">
+        <input name="confirm" type="password" required minLength={8} autoComplete="new-password" className={inputCls} />
+      </Field>
+      {state?.error && <p role="status" className="text-sm text-danger">{state.error}</p>}
+      <Submit>Save new password</Submit>
     </form>
   );
 }

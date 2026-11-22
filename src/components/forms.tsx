@@ -70,11 +70,14 @@ export function LoginForm() {
   return (
     <form action={action} className="space-y-4">
       <Field label="Email">
-        <input name="email" type="email" required autoComplete="email" className={inputCls} />
+        <input name="email" type="email" required autoComplete="email" defaultValue={state?.email} key={state?.email} className={inputCls} />
       </Field>
       <Field label="Password">
         <input name="password" type="password" required autoComplete="current-password" className={inputCls} />
       </Field>
+      <a href="/forgot-password" className="-mt-2 block text-right text-xs text-muted hover:text-accent">
+        Forgot password?
+      </a>
       <Message state={state} />
       <Submit>Log in</Submit>
     </form>
