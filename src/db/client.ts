@@ -15,6 +15,13 @@ export async function createDb(): Promise<Db> {
     const postgres = (await import("postgres")).default;
     return drizzle(postgres(url, { prepare: false }), { schema }) as unknown as Db;
   }
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_EMBEDDED_DB !== "1") {
+    // The embedded database is for local development only: it is slow to start,
+    // memory-hungry, and would lose data on hosts without a persistent disk.
+    throw new Error(
+      "DATABASE_URL is not set. Add it to the app's environment variables (on Railway: ${{Postgres.DATABASE_URL}}).",
+    );
+  }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");
   const dir = path.join(process.cwd(), "data", "pglite");

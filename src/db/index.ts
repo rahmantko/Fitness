@@ -12,6 +12,11 @@ export function getDb(): Promise<Db> {
       await migrateDb(db);
       return db;
     });
+    // Don't cache a failed connection: let the next request retry and log the reason.
+    g.__db.catch((e) => {
+      console.error("Database setup failed:", e);
+      g.__db = undefined;
+    });
   }
   return g.__db;
 }
