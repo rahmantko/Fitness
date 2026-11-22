@@ -133,33 +133,6 @@ export async function saveDailyLog(_: FormState, form: FormData): Promise<FormSt
   return { ok: `Saved ${date}.` };
 }
 
-/** Imports a CSV with a date column and a steps column (header row optional). */
-export async function importSteps(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireClientSelf();
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file." };
-  if (file.size > 2 * 1024 * 1024) return { error: "CSV is larger than 2 MB." };
-  const rows: { date: string; steps: number }[] = [];
-  for (const line of (await file.text()).split(/\r?\n/)) {
-    const [d, s] = line.split(/[,;\t]/).map((x) => x.trim().replace(/^"|"$/g, ""));
-    const date = d?.slice(0, 10);
-    const steps = Number(s);
-    if (isIsoDate(date) && Number.isFinite(steps) && steps >= 0) rows.push({ date, steps: Math.round(steps) });
-  }
-  if (rows.length === 0) return { error: "No rows found. Use one row per day: 2026-11-01,8450" };
-  const db = await getDb();
-  for (const r of rows) {
-    await db
-      .insert(dailyLogs)
-      .values({ clientId: user.id, date: r.date, steps: r.steps })
-      .onConflictDoUpdate({ target: [dailyLogs.clientId, dailyLogs.date], set: { steps: r.steps } });
-  }
-  revalidatePath(`/clients/${user.id}`, "layout");
-  return { ok: `Imported steps for ${rows.length} day${rows.length === 1 ? "" : "s"}.` };
-}
-
-// ---------- Check-ins ----------
-
 export async function createCheckin(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireClientSelf();
   const db = await getDb();

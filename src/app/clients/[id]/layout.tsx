@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/shell";
 import { Tabs } from "@/components/tabs";
+import { Avatar } from "@/components/avatar";
 import { getViewableClient, requireUser } from "@/lib/session";
 
 export default async function ClientLayout({
@@ -25,7 +26,10 @@ export default async function ClientLayout({
             ← All clients
           </Link>
         )}
-        <h1 className="mt-1 text-2xl font-semibold">{user.role === "coach" ? client.name : `Hi, ${client.name.split(" ")[0]}`}</h1>
+        <div className="mt-1 flex items-center gap-3">
+          {user.role === "coach" && <Avatar name={client.name} avatarKey={client.avatarKey} size="md" />}
+          <h1 className="text-2xl font-semibold">{user.role === "coach" ? client.name : `Hi, ${client.name.split(" ")[0]}`}</h1>
+        </div>
         <Tabs
           items={[
             { href: base, label: "Overview" },

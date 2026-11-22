@@ -28,6 +28,12 @@ export const users = pgTable("users", {
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   // Logins made before this moment are signed out (set whenever the password changes).
   passwordChangedAt: timestamp("password_changed_at"),
+  // Profile
+  avatarKey: text("avatar_key"),
+  phone: text("phone"),
+  dateOfBirth: date("date_of_birth", { mode: "string" }),
+  heightCm: real("height_cm"),
+  bio: text("bio"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

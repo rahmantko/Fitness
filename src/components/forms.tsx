@@ -5,7 +5,6 @@ import { useFormStatus } from "react-dom";
 import {
   addBloodTest,
   createCheckin,
-  importSteps,
   logWorkout,
   login,
   saveDailyLog,
@@ -171,30 +170,28 @@ export function DailyLogForm({
 export function StepsForm({ date, steps }: { date: string; steps?: number | null }) {
   const [state, action] = useActionState(saveDailyLog, undefined);
   return (
-    <form action={action} className="space-y-3" key={`${date}-${steps}`}>
-      <div className="grid grid-cols-2 gap-3">
-        <DateInput defaultValue={date} />
-        <Num name="steps" label="Steps" step="1" defaultValue={steps} />
+    <form action={action} className="space-y-2" key={`${date}-${steps}`}>
+      <input type="hidden" name="date" value={date} />
+      <label htmlFor="steps-today" className="block text-xs font-medium text-muted">
+        Steps today
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="steps-today"
+          name="steps"
+          type="number"
+          inputMode="numeric"
+          step="1"
+          min="0"
+          required
+          placeholder="e.g. 8500"
+          defaultValue={steps ?? undefined}
+          className={`${inputCls} text-lg tabular-nums`}
+        />
+        <Submit>Save</Submit>
       </div>
-      <div className="flex items-center gap-3">
-        <Submit>Save steps</Submit>
-        <Message state={state} />
-      </div>
-    </form>
-  );
-}
-
-export function StepsImportForm() {
-  const [state, action] = useActionState(importSteps, undefined);
-  return (
-    <form action={action} className="space-y-3">
-      <Field label="CSV file" hint="One row per day: date,steps (e.g. 2026-11-01,8450). Most step apps can export this.">
-        <input name="file" type="file" accept=".csv,text/csv" required className={`${inputCls} file:mr-3 file:rounded file:border-0 file:bg-surface-2 file:px-2 file:py-1`} />
-      </Field>
-      <div className="flex items-center gap-3">
-        <Submit>Import steps</Submit>
-        <Message state={state} />
-      </div>
+      <Message state={state} />
+      <p className="text-xs text-muted">Copy the number from your phone&apos;s Health or Fitness app. To fix an earlier day, use the History tab.</p>
     </form>
   );
 }

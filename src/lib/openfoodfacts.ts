@@ -89,18 +89,84 @@ export async function fetchByBarcode(barcode: string): Promise<OffFood | null> {
   return toFood({ ...body.product, code: body.product.code ?? barcode });
 }
 
-/** Full-text product search. Open Food Facts sometimes rate-limits this; callers should handle errors. */
-export async function searchProducts(query: string): Promise<OffFood[]> {
+type SearchHit = Omit<OffProduct, "brands" | "product_name"> & {
+  brands?: string | string[];
+  product_name?: string | Record<string, string>;
+};
+
+function normaliseHit(h: SearchHit): OffProduct {
+  const brands = Array.isArray(h.brands) ? h.brands.join(",") : h.brands;
+  const pn = h.product_name;
+  const name = typeof pn === "string" ? pn : pn ? (pn.en ?? pn.main ?? Object.values(pn)[0]) : undefined;
+  return { ...h, brands, product_name: name };
+}
+
+// Search results are cached briefly because every user of the app shares one
+// server IP, and Open Food Facts limits how many searches each IP can make.
+const cache = new Map<string, { at: number; results: OffFood[] }>();
+const CACHE_MS = 60 * 60 * 1000;
+
+function rank(query: string, foods: OffFood[]) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const score = (f: OffFood) => {
+    const text = `${f.name} ${f.brand ?? ""}`.toLowerCase();
+    return words.filter((w) => text.includes(w)).length;
+  };
+  const seen = new Set<string>();
+  return foods
+    .filter((f) => f.kcal != null && !seen.has(f.barcode) && seen.add(f.barcode))
+    .map((f, i) => ({ f, s: score(f), i }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.f);
+}
+
+/** Search-a-licious, Open Food Facts' current search service. */
+async function searchService(query: string): Promise<OffFood[]> {
+  const params = new URLSearchParams({ q: query, page_size: "25", langs: "en", fields: FIELDS });
+  const res = await fetch(`https://search.openfoodfacts.org/search?${params}`, {
+    headers: { "User-Agent": UA, Accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Food search returned ${res.status}`);
+  const body = (await res.json()) as { hits?: SearchHit[] };
+  return (body.hits ?? []).map((h) => toFood(normaliseHit(h))).filter((f): f is OffFood => !!f);
+}
+
+/** The older search on the main site; slower and often busy, kept as a fallback. */
+async function searchLegacy(query: string): Promise<OffFood[]> {
   const params = new URLSearchParams({
     search_terms: query,
     search_simple: "1",
     action: "process",
     json: "1",
-    page_size: "15",
+    page_size: "20",
     fields: FIELDS,
   });
   const res = await get(`/cgi/search.pl?${params}`, 10000);
   if (!res.ok) throw new Error(`Food database returned ${res.status}`);
   const body = (await res.json()) as { products?: OffProduct[] };
-  return (body.products ?? []).map(toFood).filter((f): f is OffFood => !!f && f.kcal != null);
+  return (body.products ?? []).map(toFood).filter((f): f is OffFood => !!f);
+}
+
+/** Full-text product search (brands and packaged foods). Throws if every source fails. */
+export async function searchProducts(query: string): Promise<OffFood[]> {
+  const key = query.trim().toLowerCase();
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.results;
+  let found: OffFood[] | null = null;
+  let lastError: unknown;
+  for (const source of [searchService, searchLegacy]) {
+    try {
+      found = await source(query);
+      if (found.length) break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (found == null) throw lastError ?? new Error("Food search failed");
+  const results = rank(query, found).slice(0, 20);
+  if (cache.size > 500) cache.delete(cache.keys().next().value!);
+  cache.set(key, { at: Date.now(), results });
+  return results;
 }

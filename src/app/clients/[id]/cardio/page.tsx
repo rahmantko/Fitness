@@ -7,7 +7,7 @@ import { getTargets } from "@/lib/queries";
 import { fmtDate, fmtNum, today } from "@/lib/format";
 import { Card, Empty } from "@/components/ui";
 import { CardioForm, RemoveCardioButton } from "@/components/cardio-ui";
-import { StepsForm, StepsImportForm } from "@/components/forms";
+import { StepsForm } from "@/components/forms";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -119,15 +119,11 @@ export default async function CardioPage({
 
       {isClient && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Log cardio">
-            <CardioForm date={now} />
-          </Card>
           <Card title="Log steps">
             <StepsForm date={now} steps={todaySteps} />
-            <details className="mt-4">
-              <summary className="cursor-pointer text-sm text-muted">Import steps from a CSV</summary>
-              <div className="mt-3"><StepsImportForm /></div>
-            </details>
+          </Card>
+          <Card title="Log cardio">
+            <CardioForm date={now} />
           </Card>
         </div>
       )}

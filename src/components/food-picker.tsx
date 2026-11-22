@@ -36,7 +36,8 @@ export function FoodPicker({
   const [creating, setCreating] = useState<Prefill | null>(null);
   const [scanning, setScanning] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [online, setOnline] = useState<{ query: string; results: OffFood[] } | null>(null);
+  const [online, setOnline] = useState<{ query: string; results: OffFood[]; error?: string } | null>(null);
+  const [onlineTry, setOnlineTry] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -53,6 +54,27 @@ export function FoodPicker({
       clearTimeout(t);
     };
   }, [query, clientId]);
+
+  // Branded and packaged foods come from Open Food Facts, searched automatically as you type.
+  const q = query.trim();
+  useEffect(() => {
+    if (q.length < 3) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const r = await searchOnline(q);
+      if (cancelled) return;
+      setOnline("error" in r ? { query: q, results: [], error: r.error } : { query: q, results: r.results });
+    }, 700);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [q, onlineTry]);
+  const onlineHere = online?.query === q ? online : null;
+  const onlineLoading = q.length >= 3 && !onlineHere;
+  // Hide online products that are already in the library (e.g. scanned before).
+  const known = new Set(results.map((f) => f.barcode).filter(Boolean));
+  const onlineResults = (onlineHere?.results ?? []).filter((p) => !known.has(p.barcode));
 
   useEffect(() => searchRef.current?.focus(), []);
 
@@ -81,16 +103,6 @@ export function FoodPicker({
     start(async () => handleResult(await lookupBarcode(code)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function searchDatabase() {
-    setNotice(null);
-    start(async () => {
-      const r = await searchOnline(query);
-      if ("error" in r) return setNotice(r.error);
-      setOnline({ query, results: r.results });
-      if (r.results.length === 0) setNotice(`No products found for “${query}”.`);
-    });
-  }
 
   const amount = Number(qty);
   const preview = picked && amount > 0 ? scaleFood(picked, amount) : null;
@@ -244,38 +256,47 @@ export function FoodPicker({
                 </button>
               </li>
             ))}
-            {query && results.length === 0 && <li className="px-3 py-3 text-sm text-muted">No foods match “{query}”.</li>}
+            {query && results.length === 0 && onlineResults.length === 0 && <li className="px-3 py-3 text-sm text-muted">No saved foods match “{query}”.</li>}
           </ul>
-          {query.trim().length >= 3 && online?.query !== query && (
-            <button type="button" disabled={pending} onClick={searchDatabase} className="block text-sm font-medium text-accent disabled:opacity-60">
-              {pending ? "Searching…" : `Search the Open Food Facts database for “${query.trim()}”`}
-            </button>
-          )}
-          {online && online.query === query && online.results.length > 0 && (
+          {q.length >= 3 && (
             <div>
-              <div className="mb-1 text-xs text-muted">From Open Food Facts (values per 100 g/ml)</div>
-              <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg bg-surface">
-                {online.results.map((p) => (
-                  <li key={p.barcode}>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => start(async () => handleResult(await importOnlineFood(p.barcode)))}
-                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-accent-soft"
-                    >
-                      <span>
-                        <span className="block text-sm">{p.name}</span>
-                        <span className="block text-xs text-muted">{p.brand ?? "Unbranded"}</span>
-                      </span>
-                      <span className="shrink-0 text-right text-xs tabular-nums text-muted">
-                        {fmtMacro(p.kcal ?? 0)} kcal
-                        <br />
-                        P{fmtMacro(p.protein ?? 0)} C{fmtMacro(p.carbs ?? 0)} F{fmtMacro(p.fat ?? 0)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mb-1 flex items-center justify-between text-xs text-muted">
+                <span>More foods and brands (per 100 g/ml)</span>
+                {onlineLoading && <span role="status">Searching…</span>}
+              </div>
+              {onlineHere?.error ? (
+                <p className="text-sm text-muted">
+                  {onlineHere.error}{" "}
+                  <button type="button" onClick={() => { setOnline(null); setOnlineTry((n) => n + 1); }} className="font-medium text-accent">
+                    Try again
+                  </button>
+                </p>
+              ) : onlineResults.length > 0 ? (
+                <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg bg-surface">
+                  {onlineResults.map((p) => (
+                    <li key={p.barcode}>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => start(async () => handleResult(await importOnlineFood(p.barcode)))}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-accent-soft disabled:opacity-60"
+                      >
+                        <span>
+                          <span className="block text-sm">{p.name}</span>
+                          <span className="block text-xs text-muted">{p.brand ?? "Unbranded"}</span>
+                        </span>
+                        <span className="shrink-0 text-right text-xs tabular-nums text-muted">
+                          {fmtMacro(p.kcal ?? 0)} kcal
+                          <br />
+                          P{fmtMacro(p.protein ?? 0)} C{fmtMacro(p.carbs ?? 0)} F{fmtMacro(p.fat ?? 0)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                onlineHere && <p className="text-sm text-muted">No branded products found. Try fewer words, scan the barcode, or create the food.</p>
+              )}
             </div>
           )}
           <button type="button" onClick={() => setCreating({})} className="block text-sm font-medium text-accent">

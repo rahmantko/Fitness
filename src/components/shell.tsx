@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { logout } from "@/app/actions";
 import type { User } from "@/db/schema";
+import { Avatar } from "./avatar";
 
 export function TopBar({ user }: { user: User }) {
   return (
@@ -12,11 +13,11 @@ export function TopBar({ user }: { user: User }) {
           Checkpoint
         </Link>
         <div className="flex items-center gap-3 text-sm">
-          <Link href="/account" className="text-muted hover:text-text">
+          <Link href="/account" aria-label="Your profile" className="flex items-center gap-2 rounded-full py-0.5 pl-0.5 pr-0.5 text-muted hover:bg-surface-2 hover:text-text sm:pr-3">
+            <Avatar name={user.name} avatarKey={user.avatarKey} />
             <span className="hidden sm:inline">
               {user.name} · <span className="capitalize">{user.role}</span>
             </span>
-            <span className="sm:hidden">Account</span>
           </Link>
           <form action={logout}>
             <button className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">Log out</button>

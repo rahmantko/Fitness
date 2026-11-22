@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/session";
 import { fillDays, getDailyLogs, getTargets } from "@/lib/queries";
 import { fmtDate, fmtNum, isIsoDate, today } from "@/lib/format";
 import { Card } from "@/components/ui";
-import { DailyLogForm, StepsImportForm } from "@/components/forms";
+import { DailyLogForm } from "@/components/forms";
 import { DailyBars } from "@/components/charts";
 
 function pct(v: number | null | undefined, target: number | null | undefined) {
@@ -37,15 +37,10 @@ export default async function DailyPage({
   return (
     <>
       {viewer.role === "client" && (
-        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-          <Card title={`Weight & steps for ${date === today() ? "today" : fmtDate(date)}`}>
-            <DailyLogForm date={date} existing={logs.find((l) => l.date === date)} />
-            <p className="mt-3 text-xs text-muted">Pick a date to edit an earlier day. Calories and macros come from the Nutrition tab.</p>
-          </Card>
-          <Card title="Import steps">
-            <StepsImportForm />
-          </Card>
-        </div>
+        <Card title={`Weight & steps for ${date === today() ? "today" : fmtDate(date)}`}>
+          <DailyLogForm date={date} existing={logs.find((l) => l.date === date)} />
+          <p className="mt-3 text-xs text-muted">Pick a date to edit an earlier day. Calories and macros come from the Nutrition tab.</p>
+        </Card>
       )}
 
       <Card title={t?.calories ? "Calories (30 days, dashed line = target)" : "Calories (30 days)"}>

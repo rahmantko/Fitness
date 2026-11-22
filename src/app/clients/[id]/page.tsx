@@ -16,6 +16,7 @@ function avg(xs: (number | null)[]) {
 export default async function Overview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const viewer = await requireUser();
+  const client = viewer.role === "coach" ? await getViewableClient(viewer, id) : null;
   const isClient = viewer.role === "client";
   const [logs, checkins, t] = await Promise.all([getDailyLogs(id, 90), getCheckins(id), getTargets(id)]);
 
@@ -109,13 +110,40 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
         )}
       </Card>
 
-      {viewer.role === "coach" ? (
+      {viewer.role === "coach" && client ? (
         <>
+          <Card title="Profile">
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Joined</dt>
+              <dd>{client.createdAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</dd>
+              <dt className="text-muted">Email</dt>
+              <dd className="truncate"><a href={`mailto:${client.email}`} className="text-accent">{client.email}</a></dd>
+              {client.phone && (
+                <>
+                  <dt className="text-muted">Phone</dt>
+                  <dd><a href={`tel:${client.phone}`} className="text-accent">{client.phone}</a></dd>
+                </>
+              )}
+              {client.dateOfBirth && (
+                <>
+                  <dt className="text-muted">Date of birth</dt>
+                  <dd>{fmtDate(client.dateOfBirth)}</dd>
+                </>
+              )}
+              {client.heightCm != null && (
+                <>
+                  <dt className="text-muted">Height</dt>
+                  <dd>{fmtNum(client.heightCm)} cm</dd>
+                </>
+              )}
+            </dl>
+            {client.bio && <p className="mt-3 whitespace-pre-line text-sm">{client.bio}</p>}
+          </Card>
           <Card title="Targets">
             <TargetsForm clientId={id} t={t ?? undefined} />
           </Card>
           <Card title="Login help">
-            <ResetClientPassword clientId={id} clientName={(await getViewableClient(viewer, id))?.name ?? "This client"} />
+            <ResetClientPassword clientId={id} clientName={client.name} />
           </Card>
         </>
       ) : (

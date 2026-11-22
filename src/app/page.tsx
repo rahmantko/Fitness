@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/avatar";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { regenerateInviteCode } from "./actions";
@@ -69,10 +70,13 @@ export default async function Home() {
                 {roster.map((r) => (
                   <tr key={r.client.id} className="border-t border-border hover:bg-surface-2/60">
                     <td className="px-4 py-3">
-                      <Link href={`/clients/${r.client.id}`} className="font-medium hover:text-accent">
-                        {r.client.name}
+                      <Link href={`/clients/${r.client.id}`} className="flex items-center gap-3 hover:text-accent">
+                        <Avatar name={r.client.name} avatarKey={r.client.avatarKey} size="md" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">{r.client.name}</span>
+                          <span className="block truncate text-xs text-muted">{r.client.email}</span>
+                        </span>
                       </Link>
-                      <div className="text-xs text-muted">{r.client.email}</div>
                     </td>
                     <td className="px-4 py-3">
                       {r.lastCheckin ? fmtDate(r.lastCheckin.date) : <span className="text-muted">None yet</span>}
