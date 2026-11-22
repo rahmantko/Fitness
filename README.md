@@ -54,13 +54,18 @@ File storage writes to local disk (`src/lib/storage.ts`). On serverless hosting,
 
 ## Password reset emails
 
-"Forgot password?" on the login page emails a one-time link (valid for 1 hour). Emails are sent with [Resend](https://resend.com):
+"Forgot password?" on the login page emails a one-time link (valid for 1 hour). Set up one email provider:
+
+**Brevo (no domain needed):** sign up at [brevo.com](https://www.brevo.com), add and verify your sender email under *Senders, Domains & Dedicated IPs*, create an API key under *SMTP & API*, then set:
 
 | Variable | What to put |
 | --- | --- |
-| `RESEND_API_KEY` | API key from Resend. Without it, reset emails are printed to the server log instead of sent. |
-| `EMAIL_FROM` | Sender, e.g. `Checkpoint <hello@yourdomain.com>`. The domain must be verified in Resend. Until then Resend only delivers to your own Resend account email. |
-| `APP_URL` | Optional. The site address used in links; on Railway it's detected automatically. |
+| `BREVO_API_KEY` | Your Brevo API key |
+| `EMAIL_FROM` | The verified sender, e.g. `Checkpoint <you@gmail.com>` |
+
+**Resend (needs your own domain):** set `RESEND_API_KEY` and `EMAIL_FROM` with an address on a domain verified in Resend.
+
+Without either, reset emails are printed to the server log instead of sent. `APP_URL` (optional) sets the site address used in links; on Railway it's detected automatically.
 
 ## Locked out?
 
