@@ -4,7 +4,7 @@ import { getCheckins } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
 import { ButtonLink, Card, Empty } from "@/components/ui";
 import { FeedbackForm } from "@/components/forms";
-import { StoredImage } from "@/components/stored-image";
+import { PhotoStrip } from "@/components/photo-viewer";
 
 export default async function CheckinsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -59,13 +59,13 @@ export default async function CheckinsPage({ params }: { params: Promise<{ id: s
               ))}
             </dl>
             {c.photos.length > 0 && (
-              <div className="mt-3 flex gap-2">
-                {c.photos.map((p) => (
-                  <a key={p.id} href={`/api/files/${p.fileKey}`} target="_blank" className="block w-20">
-                    <StoredImage fileKey={p.fileKey} alt={`${p.pose} photo`} className="aspect-[3/4] w-full rounded-lg object-cover" />
-                    <span className="mt-0.5 block text-center text-xs capitalize text-muted">{p.pose}</span>
-                  </a>
-                ))}
+              <div className="mt-3">
+                <PhotoStrip
+                  title={fmtDate(c.date)}
+                  photos={(["front", "side", "back"] as const)
+                    .flatMap((pose) => c.photos.filter((p) => p.pose === pose))
+                    .map((p) => ({ id: p.id, fileKey: p.fileKey, label: p.pose }))}
+                />
               </div>
             )}
             {c.notes && (

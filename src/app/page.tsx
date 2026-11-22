@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { regenerateInviteCode } from "./actions";
 import { TopBar } from "@/components/shell";
+import { InviteShare } from "@/components/invite-share";
 import { Card, Empty } from "@/components/ui";
 import { requireUser } from "@/lib/session";
 import { getRoster } from "@/lib/queries";
@@ -28,7 +29,7 @@ export default async function Home() {
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm">
             <span className="text-muted">Invite code</span>
-            <code className="font-mono font-semibold tracking-wider">{user.inviteCode}</code>
+            <InviteShare code={user.inviteCode ?? ""} coachName={user.name} />
             <form action={regenerateInviteCode}>
               <button className="text-xs text-muted underline hover:text-text" title="Old code stops working">
                 New code
@@ -48,7 +49,7 @@ export default async function Home() {
         {roster.length === 0 ? (
           <Card>
             <Empty>
-              No clients yet. Share your invite code above; clients enter it when they sign up and appear here.
+              No clients yet. Tap Invite client above to send your sign-up link. New clients appear here as soon as they join.
             </Empty>
           </Card>
         ) : (

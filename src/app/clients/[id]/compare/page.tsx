@@ -2,7 +2,7 @@ import { getCheckins } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
 import { Card, Empty, inputCls } from "@/components/ui";
 import type { Checkin } from "@/db/schema";
-import { StoredImage } from "@/components/stored-image";
+import { ComparePhotos } from "@/components/photo-viewer";
 
 const METRICS: { key: keyof Checkin; label: string; unit: string }[] = [
   { key: "weightKg", label: "Weight", unit: "kg" },
@@ -57,27 +57,21 @@ export default async function ComparePage({
 
       <Card title={`${fmtDate(a.date)} → ${fmtDate(b.date)}`} action={<span className="text-sm text-muted">{Math.abs(days)} days</span>}>
         <div className="space-y-4">
-          {(["front", "side", "back"] as const).map((pose) => {
-            const pa = a.photos.find((p) => p.pose === pose);
-            const pb = b.photos.find((p) => p.pose === pose);
-            if (!pa && !pb) return null;
-            return (
-              <div key={pose}>
-                <h3 className="mb-2 text-sm font-medium capitalize">{pose}</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {[pa, pb].map((p, i) =>
-                    p ? (
-                      <StoredImage key={i} fileKey={p.fileKey} alt={`${pose} ${i ? "after" : "before"}`} className="aspect-[3/4] w-full rounded-xl object-cover" />
-                    ) : (
-                      <div key={i} className="flex aspect-[3/4] items-center justify-center rounded-xl bg-surface-2 text-xs text-muted">
-                        No photo
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          <ComparePhotos
+            beforeLabel={fmtDate(a.date)}
+            afterLabel={fmtDate(b.date)}
+            rows={(["front", "side", "back"] as const)
+              .map((pose) => {
+                const pa = a.photos.find((p) => p.pose === pose);
+                const pb = b.photos.find((p) => p.pose === pose);
+                return {
+                  pose,
+                  before: pa ? { id: pa.id, fileKey: pa.fileKey, label: `${pose} · ${fmtDate(a.date)}` } : null,
+                  after: pb ? { id: pb.id, fileKey: pb.fileKey, label: `${pose} · ${fmtDate(b.date)}` } : null,
+                };
+              })
+              .filter((r) => r.before || r.after)}
+          />
           {a.photos.length + b.photos.length === 0 && <Empty>Neither check-in has photos.</Empty>}
         </div>
       </Card>

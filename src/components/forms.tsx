@@ -84,11 +84,14 @@ export function LoginForm() {
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ code }: { code?: string }) {
   const [state, action] = useActionState(signup, undefined);
   const [role, setRole] = useState<"client" | "coach">("client");
+  const invited = !!code;
   return (
     <form action={action} className="space-y-4">
+      {invited && <input type="hidden" name="role" value="client" />}
+      {!invited && (
       <fieldset className="grid grid-cols-2 gap-2">
         <legend className="mb-1 text-xs font-medium text-muted">I am a</legend>
         {(["client", "coach"] as const).map((r) => (
@@ -110,6 +113,7 @@ export function SignupForm() {
           </label>
         ))}
       </fieldset>
+      )}
       <Field label="Name">
         <input name="name" required autoComplete="name" className={inputCls} />
       </Field>
@@ -121,7 +125,7 @@ export function SignupForm() {
       </Field>
       {role === "client" && (
         <Field label="Coach invite code" hint="Your coach can find this on their dashboard">
-          <input name="inviteCode" required className={`${inputCls} uppercase`} />
+          <input name="inviteCode" required defaultValue={code} readOnly={invited} className={`${inputCls} uppercase ${invited ? "bg-surface-2" : ""}`} />
         </Field>
       )}
       <Message state={state} />
