@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/session";
 import { getCheckins } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
 import { ButtonLink, Card, Empty } from "@/components/ui";
-import { FeedbackForm } from "@/components/forms";
+import { Comments, FeedbackEditor, FeedbackView } from "@/components/feedback";
 import { PhotoStrip } from "@/components/photo-viewer";
 
 export default async function CheckinsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -74,16 +74,21 @@ export default async function CheckinsPage({ params }: { params: Promise<{ id: s
                 {c.notes}
               </p>
             )}
-            <div className="mt-3 border-t border-border pt-3">
+            <div className="mt-3 space-y-3 border-t border-border pt-3">
               {viewer.role === "coach" ? (
-                <FeedbackForm checkinId={c.id} feedback={c.coachFeedback} />
-              ) : c.coachFeedback ? (
-                <blockquote className="whitespace-pre-line rounded-xl bg-accent-soft p-3 text-sm">
-                  <div className="mb-1 text-xs font-medium text-accent">Coach feedback</div>
-                  {c.coachFeedback}
-                </blockquote>
+                <FeedbackEditor checkinId={c.id} fb={{ text: c.coachFeedback, audioKey: c.feedbackAudioKey, videoUrl: c.feedbackVideoUrl }} />
+              ) : c.coachFeedback || c.feedbackAudioKey || c.feedbackVideoUrl ? (
+                <FeedbackView fb={{ text: c.coachFeedback, audioKey: c.feedbackAudioKey, videoUrl: c.feedbackVideoUrl }} />
               ) : (
                 <p className="text-sm text-muted">Waiting for coach feedback.</p>
+              )}
+              {(c.comments.length > 0 || c.coachFeedback || c.feedbackAudioKey || c.feedbackVideoUrl) && (
+                <div className="border-t border-border pt-3">
+                  <div className="mb-2 text-xs font-medium text-muted">
+                    {c.comments.length ? `Replies (${c.comments.length})` : viewer.role === "client" ? "Questions about this feedback?" : "Replies"}
+                  </div>
+                  <Comments checkinId={c.id} comments={c.comments} viewerId={viewer.id} viewerRole={viewer.role} />
+                </div>
               )}
             </div>
           </Card>

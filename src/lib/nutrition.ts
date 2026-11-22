@@ -107,7 +107,6 @@ export async function syncMealsToPlan(clientId: string, date: string, dayType: D
   const linked = new Set(kept.filter((m) => m.planMealId && planIds.has(m.planMealId)).map((m) => m.planMealId));
   for (const m of kept) {
     if (m.planMealId && planIds.has(m.planMealId)) continue;
-    if (!m.planMealId && !hasItems.has(m.id)) continue;
     const match = plan.find((p) => !linked.has(p.id) && p.name.trim().toLowerCase() === m.name.trim().toLowerCase());
     if (match) linked.add(match.id);
     if (match || m.planMealId) {

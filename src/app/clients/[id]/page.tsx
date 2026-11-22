@@ -96,10 +96,22 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
               {lastCheckin.weightKg != null && <span className="text-muted"> · {fmtNum(lastCheckin.weightKg)} kg</span>}
               <span className="text-muted"> · {lastCheckin.photos.length} photos</span>
             </p>
-            {lastCheckin.coachFeedback ? (
+            {lastCheckin.coachFeedback || lastCheckin.feedbackAudioKey || lastCheckin.feedbackVideoUrl ? (
               <blockquote className="rounded-xl bg-accent-soft p-3">
                 <div className="mb-1 text-xs font-medium text-accent">Coach feedback</div>
-                {lastCheckin.coachFeedback}
+                {lastCheckin.coachFeedback && <p className="line-clamp-4 whitespace-pre-line">{lastCheckin.coachFeedback}</p>}
+                {(lastCheckin.feedbackAudioKey || lastCheckin.feedbackVideoUrl || lastCheckin.comments.length > 0) && (
+                  <Link href={`/clients/${id}/checkins`} className="mt-1 inline-block text-sm font-medium text-accent">
+                    {[
+                      lastCheckin.feedbackAudioKey && "🎙 Voice note",
+                      lastCheckin.feedbackVideoUrl && "▶ Video",
+                      lastCheckin.comments.length > 0 && `💬 ${lastCheckin.comments.length} ${lastCheckin.comments.length === 1 ? "reply" : "replies"}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}{" "}
+                    →
+                  </Link>
+                )}
               </blockquote>
             ) : (
               <p className="text-muted">Waiting for coach feedback.</p>

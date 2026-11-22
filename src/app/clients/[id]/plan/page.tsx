@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
-import { cardioPlan, type DayType } from "@/db/schema";
-import { requireUser } from "@/lib/session";
+import { cardioPlan, planMeals, users, type DayType } from "@/db/schema";
+import { getViewableClient, requireUser } from "@/lib/session";
 import { getPlan } from "@/lib/nutrition";
 import { sumMacros } from "@/lib/macros";
 import { Card, Empty } from "@/components/ui";
 import { MacroBars } from "@/components/macro-bars";
-import { CardioPlanForm, PlanMealEditor, PlanToolbar } from "@/components/plan-ui";
+import { CardioPlanForm, CopyFromClient, PlanMealEditor, PlanToolbar } from "@/components/plan-ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -31,6 +31,18 @@ export default async function PlanPage({
     getPlan(id, other),
     db.select().from(cardioPlan).where(eq(cardioPlan.clientId, id)),
   ]);
+  // Other clients of this coach who have a plan to copy from.
+  const client = isCoach ? await getViewableClient(viewer, id) : null;
+  const others = isCoach
+    ? (
+        await db
+          .selectDistinct({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(planMeals, eq(planMeals.clientId, users.id))
+          .where(and(eq(users.coachId, viewer.id), ne(users.id, id)))
+          .orderBy(asc(users.name))
+      )
+    : [];
   const total = sumMacros(plan.map((m) => m.target));
   const cardioMap = Object.fromEntries(cardio.map((c) => [c.weekday, c.task]));
 
@@ -82,6 +94,12 @@ export default async function PlanPage({
       {isCoach && (
         <Card>
           <PlanToolbar clientId={id} dayType={dayType} otherHasMeals={otherPlan.length > 0} />
+        </Card>
+      )}
+
+      {isCoach && (
+        <Card title="Copy a plan from another client">
+          <CopyFromClient clientId={id} clientName={client?.name ?? "this client"} others={others} />
         </Card>
       )}
 

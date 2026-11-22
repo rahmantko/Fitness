@@ -21,12 +21,19 @@ const ALLOWED: Record<string, string> = {
   "image/webp": "webp",
   "image/heic": "heic",
   "application/pdf": "pdf",
+  // Voice notes: Safari records MP4/AAC, Chrome and Android record WebM/Opus.
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
 };
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 /** Saves a file under the client's folder and returns its key. */
 export async function saveFile(clientId: string, file: File): Promise<string> {
-  const ext = ALLOWED[file.type];
+  const ext = ALLOWED[file.type.split(";")[0].trim().toLowerCase()];
   if (!ext) throw new Error(`Unsupported file type: ${file.type || "unknown"}`);
   if (file.size > MAX_UPLOAD_BYTES) throw new Error("File is larger than 15 MB");
   const key = `${clientId}/${randomUUID()}.${ext}`;
@@ -37,7 +44,7 @@ export async function saveFile(clientId: string, file: File): Promise<string> {
 }
 
 export function isValidKey(key: string) {
-  return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|webp|heic|pdf)$/.test(key);
+  return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|webp|heic|pdf|m4a|aac|mp3|webm|ogg)$/.test(key);
 }
 
 export async function readStoredFile(key: string) {

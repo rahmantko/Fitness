@@ -8,7 +8,6 @@ import {
   logWorkout,
   login,
   saveDailyLog,
-  saveFeedback,
   saveTargets,
   signup,
   type FormState,
@@ -280,26 +279,6 @@ export function CheckinForm({ date, lastWeight }: { date: string; lastWeight?: n
       </Field>
       <div className="flex items-center gap-3">
         <Submit>Submit check-in</Submit>
-        <Message state={state} />
-      </div>
-    </form>
-  );
-}
-
-export function FeedbackForm({ checkinId, feedback }: { checkinId: string; feedback: string | null }) {
-  const [state, action] = useActionState(saveFeedback, undefined);
-  return (
-    <form action={action} className="space-y-2">
-      <input type="hidden" name="checkinId" value={checkinId} />
-      <textarea
-        name="feedback"
-        rows={3}
-        defaultValue={feedback ?? ""}
-        className={inputCls}
-        placeholder="Feedback for your client…"
-      />
-      <div className="flex items-center gap-3">
-        <Submit>Save feedback</Submit>
         <Message state={state} />
       </div>
     </form>

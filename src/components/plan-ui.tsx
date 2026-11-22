@@ -5,6 +5,7 @@ import {
   addPlanItem,
   addPlanMeal,
   copyPlan,
+  copyPlanFromClient,
   movePlanMeal,
   removePlanItem,
   removePlanMeal,
@@ -168,6 +169,52 @@ export function PlanToolbar({ clientId, dayType, otherHasMeals }: { clientId: st
         </button>
       </div>
     </div>
+  );
+}
+
+/** Coach: start this client's plan from another client's plan, then tweak it. */
+export function CopyFromClient({ clientId, clientName, others }: { clientId: string; clientName: string; others: { id: string; name: string }[] }) {
+  const [from, setFrom] = useState(others[0]?.id ?? "");
+  const [opts, setOpts] = useState({ training: true, rest: true, cardio: true });
+  const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
+  const [pending, start] = useTransition();
+  if (others.length === 0) {
+    return <p className="text-sm text-muted">Once you have more clients, you can copy a plan from one of them here.</p>;
+  }
+  const fromName = others.find((o) => o.id === from)?.name ?? "";
+  const box = (key: keyof typeof opts, label: string) => (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={opts[key]} onChange={(e) => setOpts({ ...opts, [key]: e.target.checked })} className="h-4 w-4 accent-[var(--color-accent)]" />
+      {label}
+    </label>
+  );
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!confirm(`Replace ${clientName}'s plan with a copy of ${fromName}'s? You can edit it afterwards.`)) return;
+        start(async () => setMsg(await copyPlanFromClient(clientId, from, opts)));
+      }}
+    >
+      <p className="text-sm text-muted">Copy a plan you&apos;ve already built, then adjust the amounts for {clientName}.</p>
+      <select value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Copy from client" className={inputCls}>
+        {others.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </select>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {box("training", "Training day meals")}
+        {box("rest", "Rest day meals")}
+        {box("cardio", "Cardio & steps plan")}
+      </div>
+      {msg && <p role="status" className={`text-sm ${msg.error ? "text-danger" : "text-accent"}`}>{msg.error ?? msg.ok}</p>}
+      <button disabled={pending} className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-2 disabled:opacity-60">
+        {pending ? "Copying…" : `Copy from ${fromName}`}
+      </button>
+    </form>
   );
 }
 

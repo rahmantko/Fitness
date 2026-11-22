@@ -172,20 +172,6 @@ export async function createCheckin(_: FormState, form: FormData): Promise<FormS
   redirect(`/clients/${user.id}/checkins`);
 }
 
-export async function saveFeedback(_: FormState, form: FormData): Promise<FormState> {
-  const checkinId = String(form.get("checkinId"));
-  const db = await getDb();
-  const [c] = await db.select().from(checkins).where(eq(checkins.id, checkinId));
-  if (!c) return { error: "Check-in not found." };
-  await requireCoachOf(c.clientId);
-  await db
-    .update(checkins)
-    .set({ coachFeedback: str(form.get("feedback")) })
-    .where(eq(checkins.id, checkinId));
-  revalidatePath(`/clients/${c.clientId}`, "layout");
-  return { ok: "Feedback saved." };
-}
-
 // ---------- Targets ----------
 
 export async function saveTargets(_: FormState, form: FormData): Promise<FormState> {

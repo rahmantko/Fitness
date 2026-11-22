@@ -5,7 +5,9 @@ import {
   addMeal,
   addMealItem,
   copyPreviousDay,
+  eatMealAsPlanned,
   fillMealFromPlan,
+  quickAddItem,
   removeMeal,
   removeMealItem,
   setDayType,
@@ -26,6 +28,7 @@ export type MealView = {
   fromPlan: boolean;
   planHasFoods: boolean;
   planNotes: string | null;
+  planned: { name: string; qty: number; unit: string; kcal: number }[];
   items: Item[];
   logged: Macros;
   target: Macros | null;
@@ -72,11 +75,84 @@ export function DayTypeToggle({ date, dayType, editable }: { date: string; dayTy
   );
 }
 
+/** How far the logged meal is from the coach's plan, in calories. */
+function Variance({ logged, target }: { logged: Macros; target: Macros }) {
+  const diff = Math.round(logged.kcal - target.kcal);
+  const close = Math.abs(diff) <= Math.max(25, target.kcal * 0.05);
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
+        close ? "bg-accent-soft text-accent" : diff > 0 ? "bg-surface-2 text-warn" : "bg-surface-2 text-muted"
+      }`}
+    >
+      {close ? "On plan" : diff > 0 ? `${diff} kcal over plan` : `${-diff} kcal under plan`}
+    </span>
+  );
+}
+
+function QuickAdd({ mealId, onDone }: { mealId: string; onDone: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const n = (v: FormDataEntryValue | null) => (v == null || String(v).trim() === "" ? null : Number(v));
+  return (
+    <form
+      className="space-y-2 rounded-xl border border-border bg-surface-2 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const kcal = n(fd.get("kcal"));
+        if (kcal == null || !(kcal >= 0)) return setError("Enter the calories.");
+        start(async () => {
+          const r = await quickAddItem(mealId, {
+            name: String(fd.get("name") ?? ""),
+            kcal,
+            protein: n(fd.get("protein")),
+            carbs: n(fd.get("carbs")),
+            fat: n(fd.get("fat")),
+          });
+          if (r.error) setError(r.error);
+          else onDone();
+        });
+      }}
+    >
+      <div className="text-sm font-medium">Add something extra</div>
+      <p className="text-xs text-muted">For anything not in the plan, like a sauce, a drink or a bigger portion. Calories are enough; macros are optional.</p>
+      <input name="name" placeholder="What was it? e.g. Extra rice" aria-label="What was it" className={inputCls} autoFocus />
+      <div className="grid grid-cols-4 gap-2">
+        {(
+          [
+            ["kcal", "kcal"],
+            ["protein", "P (g)"],
+            ["carbs", "C (g)"],
+            ["fat", "F (g)"],
+          ] as const
+        ).map(([name, label]) => (
+          <label key={name} className="text-xs text-muted">
+            {label}
+            <input name={name} type="number" inputMode="decimal" step="any" min="0" required={name === "kcal"} className={`${inputBase} w-full tabular-nums`} />
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <div className="flex gap-2">
+        <button disabled={pending} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-text disabled:opacity-60">
+          {pending ? "Adding…" : "Add"}
+        </button>
+        <button type="button" onClick={onDone} className="px-3 text-sm text-muted">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function MealCard({ meal, editable }: { meal: MealView; editable: boolean }) {
   const [adding, setAdding] = useState(false);
+  const [quick, setQuick] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const t = meal.target;
+  const showPlan = meal.planned.length > 0 && meal.items.length === 0;
 
   return (
     <section className={`rounded-2xl border bg-surface ${meal.completed ? "border-accent/50" : "border-border"} ${pending ? "opacity-70" : ""}`}>
@@ -91,9 +167,9 @@ export function MealCard({ meal, editable }: { meal: MealView; editable: boolean
         </h3>
         {editable && (
           <div className="flex items-center gap-3 text-sm">
-            {meal.planHasFoods && (
-              <button type="button" onClick={() => start(() => fillMealFromPlan(meal.id))} className="text-accent hover:underline" title="Add the foods your coach planned for this meal">
-                Use plan
+            {meal.planHasFoods && meal.items.length > 0 && !meal.completed && (
+              <button type="button" onClick={() => start(() => fillMealFromPlan(meal.id))} className="text-accent hover:underline" title="Add any planned foods that aren't logged yet">
+                Add planned foods
               </button>
             )}
             {!meal.fromPlan && (
@@ -116,14 +192,44 @@ export function MealCard({ meal, editable }: { meal: MealView; editable: boolean
         <span>P <Ratio v={meal.logged.protein} t={t?.protein} unit="g" strict={meal.completed} /></span>
         <span>C <Ratio v={meal.logged.carbs} t={t?.carbs} unit="g" strict={meal.completed} /></span>
         <span>F <Ratio v={meal.logged.fat} t={t?.fat} unit="g" strict={meal.completed} /></span>
+        {t && meal.items.length > 0 && <Variance logged={meal.logged} target={t} />}
       </div>
-      <div className={`${COLS} px-4 pt-2 text-[11px] uppercase tracking-wide text-muted`}>
+      {showPlan && (
+        <div className="px-4 pt-3">
+          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">{editable ? "Your plan for this meal" : "Planned"}</div>
+          <ul className="divide-y divide-border rounded-lg bg-surface-2">
+            {meal.planned.map((p, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="block break-words leading-snug">{p.name}</span>
+                  <span className="block text-xs text-muted">{fmtMacro(p.qty)} {p.unit}</span>
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-muted">{Math.round(p.kcal)} kcal</span>
+              </li>
+            ))}
+          </ul>
+          {editable && (
+            <div className="mt-3 space-y-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => start(() => eatMealAsPlanned(meal.id))}
+                className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-text hover:opacity-90 disabled:opacity-60"
+              >
+                ✓ I ate this as planned
+              </button>
+              <p className="text-center text-xs text-muted">Ate something different? Tick it, then change amounts or add extras below.</p>
+            </div>
+          )}
+        </div>
+      )}
+      {!showPlan && <div className={`${COLS} px-4 pt-2 text-[11px] uppercase tracking-wide text-muted`}>
         <span>Food</span>
         <span className="text-right">kcal</span>
         <span className="text-right">P</span>
         <span className="text-right">C</span>
         <span className="text-right">F</span>
-      </div>
+      </div>}
       <ul>
         {meal.items.map((it) => (
           <li key={it.id} className={`${COLS} border-b border-border px-4 py-2 last:border-0`}>
@@ -159,19 +265,26 @@ export function MealCard({ meal, editable }: { meal: MealView; editable: boolean
             <span className="text-right text-sm tabular-nums">{fmtMacro(it.fat)}</span>
           </li>
         ))}
-        {meal.items.length === 0 && <li className="px-4 py-3 text-sm text-muted">Nothing logged yet.</li>}
+        {meal.items.length === 0 && !showPlan && <li className="px-4 py-3 text-sm text-muted">Nothing logged yet.</li>}
       </ul>
 
       {editable && (
         <div className="space-y-3 px-4 pb-4 pt-2">
           {adding ? (
             <FoodPicker onAdd={(foodId, qty) => addMealItem(meal.id, foodId, qty)} onClose={() => setAdding(false)} />
+          ) : quick ? (
+            <QuickAdd mealId={meal.id} onDone={() => setQuick(false)} />
           ) : (
-            <div className="flex items-center justify-between">
-              <button type="button" onClick={() => setAdding(true)} className="text-sm font-medium text-accent">
-                + Add food
-              </button>
-              <button
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-4">
+                <button type="button" onClick={() => setAdding(true)} className="text-sm font-medium text-accent">
+                  + Add food
+                </button>
+                <button type="button" onClick={() => setQuick(true)} className="text-sm font-medium text-accent">
+                  + Extra calories
+                </button>
+              </div>
+              {!showPlan && <button
                 type="button"
                 onClick={() => start(() => toggleMealComplete(meal.id))}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
@@ -179,7 +292,7 @@ export function MealCard({ meal, editable }: { meal: MealView; editable: boolean
                 }`}
               >
                 {meal.completed ? "Completed ✓" : "Mark complete"}
-              </button>
+              </button>}
             </div>
           )}
         </div>

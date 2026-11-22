@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import {
   bloodMarkers,
   bloodTests,
+  checkinComments,
   checkins,
   dailyLogs,
   photos,
@@ -48,7 +49,19 @@ export async function getCheckins(clientId: string) {
   const ph = list.length
     ? await db.select().from(photos).where(inArray(photos.checkinId, list.map((c) => c.id)))
     : [];
-  return list.map((c) => ({ ...c, photos: ph.filter((p) => p.checkinId === c.id) }));
+  const cm = list.length
+    ? await db
+        .select({ id: checkinComments.id, checkinId: checkinComments.checkinId, body: checkinComments.body, createdAt: checkinComments.createdAt, authorId: users.id, authorName: users.name, authorRole: users.role, authorAvatar: users.avatarKey })
+        .from(checkinComments)
+        .innerJoin(users, eq(checkinComments.authorId, users.id))
+        .where(inArray(checkinComments.checkinId, list.map((c) => c.id)))
+        .orderBy(asc(checkinComments.createdAt))
+    : [];
+  return list.map((c) => ({
+    ...c,
+    photos: ph.filter((p) => p.checkinId === c.id),
+    comments: cm.filter((m) => m.checkinId === c.id),
+  }));
 }
 
 export async function getWorkouts(clientId: string, limit = 20) {
@@ -99,6 +112,14 @@ export async function getRoster(coachId: string) {
         .limit(2);
       const last = recent[0];
       const logs = await getDailyLogs(c.id, 7);
+      // The client asked something and the coach hasn't replied yet.
+      const [lastComment] = await db
+        .select({ authorId: checkinComments.authorId })
+        .from(checkinComments)
+        .innerJoin(checkins, eq(checkinComments.checkinId, checkins.id))
+        .where(eq(checkins.clientId, c.id))
+        .orderBy(desc(checkinComments.createdAt))
+        .limit(1);
       const stepDays = logs.filter((l) => l.steps != null);
       return {
         client: c,
@@ -107,7 +128,8 @@ export async function getRoster(coachId: string) {
           recent.length === 2 && recent[0].weightKg != null && recent[1].weightKg != null
             ? recent[0].weightKg - recent[1].weightKg
             : null,
-        needsFeedback: !!last && !last.coachFeedback,
+        newReply: lastComment?.authorId === c.id,
+        needsFeedback: !!last && !last.coachFeedback && !last.feedbackAudioKey && !last.feedbackVideoUrl,
         avgSteps: stepDays.length
           ? Math.round(stepDays.reduce((a, l) => a + (l.steps ?? 0), 0) / stepDays.length)
           : null,

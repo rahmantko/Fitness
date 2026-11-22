@@ -12,7 +12,7 @@ async function canSeeAvatar(viewer: User, key: string) {
   return owner.id === viewer.id || owner.id === viewer.coachId || owner.coachId === viewer.id;
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<{ key: string[] }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ key: string[] }> }) {
   const { key: parts } = await ctx.params;
   const key = parts.join("/");
   if (!isValidKey(key)) return new Response("Not found", { status: 404 });
@@ -23,11 +23,25 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string[] 
   }
   const file = await readStoredFile(key);
   if (!file) return new Response("Not found", { status: 404 });
-  return new Response(new Uint8Array(file.data), {
-    headers: {
-      "Content-Type": file.type,
-      "Cache-Control": "private, max-age=3600",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  const headers = {
+    "Content-Type": file.type,
+    "Cache-Control": "private, max-age=3600",
+    "X-Content-Type-Options": "nosniff",
+    "Accept-Ranges": "bytes",
+  };
+  // Safari only plays audio when the server answers byte-range requests.
+  const size = file.data.length;
+  const range = req.headers.get("range")?.match(/^bytes=(\d*)-(\d*)$/);
+  if (range && (range[1] || range[2])) {
+    let start = range[1] ? Number(range[1]) : size - Number(range[2]);
+    let end = range[1] && range[2] ? Number(range[2]) : size - 1;
+    start = Math.max(0, start);
+    end = Math.min(end, size - 1);
+    if (start > end) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
+    return new Response(new Uint8Array(file.data.subarray(start, end + 1)), {
+      status: 206,
+      headers: { ...headers, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(end - start + 1) },
+    });
+  }
+  return new Response(new Uint8Array(file.data), { headers: { ...headers, "Content-Length": String(size) } });
 }

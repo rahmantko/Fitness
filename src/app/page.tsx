@@ -88,6 +88,14 @@ export default async function Home() {
                           Needs feedback
                         </Link>
                       )}
+                      {r.newReply && (
+                        <Link
+                          href={`/clients/${r.client.id}/checkins`}
+                          className="ml-2 inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-warn"
+                        >
+                          New reply
+                        </Link>
+                      )}
                     </td>
                     <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
                       {r.lastCheckin?.weightKg != null ? `${fmtNum(r.lastCheckin.weightKg)} kg` : "–"}

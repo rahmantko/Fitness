@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, or, max } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   cardioLogs,
@@ -18,7 +18,7 @@ import {
 import { getViewableClient, requireUser } from "@/lib/session";
 import { scaleFood } from "@/lib/macros";
 import { ensureDay, previousLoggedDate, recomputeDailyTotals, syncMealsToPlan } from "@/lib/nutrition";
-import { int, isIsoDate, num, str } from "@/lib/format";
+import { int, isIsoDate, num, str, today } from "@/lib/format";
 import { fetchByBarcode, searchProducts, type OffFood } from "@/lib/openfoodfacts";
 import type { FormState } from "./actions";
 
@@ -270,8 +270,7 @@ export async function removeMealItem(itemId: string) {
 }
 
 /** Copies the planned foods for this meal into the log (skipping foods already there). */
-export async function fillMealFromPlan(dayMealId: string) {
-  const { user, meal, db } = await ownMeal(dayMealId);
+async function addPlannedFoods(db: Db, meal: { id: string; planMealId: string | null }) {
   if (!meal.planMealId) return;
   const planned = await db
     .select({ item: planItems, food: foods })
@@ -291,8 +290,48 @@ export async function fillMealFromPlan(dayMealId: string) {
       ...scaleFood(p.food, p.item.qty),
     }));
   if (rows.length) await db.insert(mealItems).values(rows);
+}
+
+export async function fillMealFromPlan(dayMealId: string) {
+  const { user, meal, db } = await ownMeal(dayMealId);
+  await addPlannedFoods(db, meal);
   await recomputeDailyTotals(user.id, meal.date);
   refresh(user.id);
+}
+
+/** One tap: "I ate this meal as planned" logs the planned foods and ticks the meal. */
+export async function eatMealAsPlanned(dayMealId: string) {
+  const { user, meal, db } = await ownMeal(dayMealId);
+  await addPlannedFoods(db, meal);
+  await db.update(dayMeals).set({ completedAt: new Date() }).where(eq(dayMeals.id, meal.id));
+  await recomputeDailyTotals(user.id, meal.date);
+  refresh(user.id);
+}
+
+/** Logs something extra without looking up a food, e.g. "Sauce, 120 kcal". */
+export async function quickAddItem(
+  dayMealId: string,
+  input: { name: string; kcal: number; protein?: number | null; carbs?: number | null; fat?: number | null },
+): Promise<{ error?: string }> {
+  const { user, meal, db } = await ownMeal(dayMealId);
+  const name = input.name.trim().slice(0, 80) || "Extra";
+  const ok = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n < 20000;
+  if (!ok(input.kcal)) return { error: "Enter the calories." };
+  const m = (n: number | null | undefined) => (ok(n) ? (n as number) : 0);
+  await db.insert(mealItems).values({
+    dayMealId: meal.id,
+    foodId: null,
+    name,
+    qty: 1,
+    unit: "serving",
+    kcal: input.kcal,
+    protein: m(input.protein),
+    carbs: m(input.carbs),
+    fat: m(input.fat),
+  });
+  await recomputeDailyTotals(user.id, meal.date);
+  refresh(user.id);
+  return {};
 }
 
 export async function toggleMealComplete(dayMealId: string) {
@@ -489,24 +528,83 @@ export async function removePlanItem(itemId: string) {
 }
 
 /** Replaces one day type's plan with a copy of the other. */
-export async function copyPlan(clientId: string, from: DayType) {
-  await requireCoachOf(clientId);
-  const to: DayType = from === "training" ? "rest" : "training";
-  const db = await getDb();
-  await db.delete(planMeals).where(and(eq(planMeals.clientId, clientId), eq(planMeals.dayType, to)));
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+/** Replaces one of a client's day plans with a copy of another plan (same or another client). */
+async function replacePlan(db: Db, toClient: string, toType: DayType, fromClient: string, fromType: DayType) {
+  const old = await db
+    .select({ id: planMeals.id })
+    .from(planMeals)
+    .where(and(eq(planMeals.clientId, toClient), eq(planMeals.dayType, toType)));
+  if (old.length) {
+    // Empty meals made from the old plan are removed; meals with food logged are kept and relinked later.
+    const oldIds = old.map((m) => m.id);
+    const linked = await db.select({ id: dayMeals.id }).from(dayMeals).where(inArray(dayMeals.planMealId, oldIds));
+    if (linked.length) {
+      const withFood = await db
+        .select({ id: mealItems.dayMealId })
+        .from(mealItems)
+        .where(inArray(mealItems.dayMealId, linked.map((m) => m.id)));
+      const keep = new Set(withFood.map((r) => r.id));
+      const empty = linked.filter((m) => !keep.has(m.id)).map((m) => m.id);
+      if (empty.length) await db.delete(dayMeals).where(inArray(dayMeals.id, empty));
+    }
+    await db.delete(planMeals).where(inArray(planMeals.id, oldIds));
+  }
   const src = await db
     .select()
     .from(planMeals)
-    .where(and(eq(planMeals.clientId, clientId), eq(planMeals.dayType, from)));
+    .where(and(eq(planMeals.clientId, fromClient), eq(planMeals.dayType, fromType)))
+    .orderBy(asc(planMeals.position));
   for (const m of src) {
     const [copy] = await db
       .insert(planMeals)
-      .values({ clientId, dayType: to, name: m.name, position: m.position, notes: m.notes })
+      .values({ clientId: toClient, dayType: toType, name: m.name, position: m.position, notes: m.notes })
       .returning();
     const its = await db.select().from(planItems).where(eq(planItems.planMealId, m.id));
     if (its.length) await db.insert(planItems).values(its.map((i) => ({ planMealId: copy.id, foodId: i.foodId, qty: i.qty })));
   }
+}
+
+/** Brings today's and future days in line with a changed plan. */
+async function resyncUpcomingDays(db: Db, clientId: string) {
+  const days = await db
+    .select()
+    .from(nutritionDays)
+    .where(and(eq(nutritionDays.clientId, clientId), gte(nutritionDays.date, today())));
+  for (const d of days) await syncMealsToPlan(clientId, d.date, d.dayType);
+}
+
+export async function copyPlan(clientId: string, from: DayType) {
+  await requireCoachOf(clientId);
+  const to: DayType = from === "training" ? "rest" : "training";
+  const db = await getDb();
+  await replacePlan(db, clientId, to, clientId, from);
+  await resyncUpcomingDays(db, clientId);
   refresh(clientId);
+}
+
+/** Copies another client's meal plans (and optionally cardio plan) onto this client, replacing theirs. */
+export async function copyPlanFromClient(
+  toClient: string,
+  fromClient: string,
+  opts: { training: boolean; rest: boolean; cardio: boolean },
+): Promise<{ ok?: string; error?: string }> {
+  await requireCoachOf(toClient);
+  await requireCoachOf(fromClient);
+  if (toClient === fromClient) return { error: "Pick a different client." };
+  if (!opts.training && !opts.rest && !opts.cardio) return { error: "Tick at least one thing to copy." };
+  const db = await getDb();
+  if (opts.training) await replacePlan(db, toClient, "training", fromClient, "training");
+  if (opts.rest) await replacePlan(db, toClient, "rest", fromClient, "rest");
+  if (opts.cardio) {
+    const src = await db.select().from(cardioPlan).where(eq(cardioPlan.clientId, fromClient));
+    await db.delete(cardioPlan).where(eq(cardioPlan.clientId, toClient));
+    if (src.length) await db.insert(cardioPlan).values(src.map((c) => ({ clientId: toClient, weekday: c.weekday, task: c.task })));
+  }
+  await resyncUpcomingDays(db, toClient);
+  refresh(toClient);
+  return { ok: "Copied. Adjust anything you need below." };
 }
 
 // ---------- Cardio ----------

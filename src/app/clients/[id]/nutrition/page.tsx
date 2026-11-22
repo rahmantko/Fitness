@@ -42,6 +42,12 @@ export default async function NutritionPage({
     fromPlan: !!m.planMealId,
     planHasFoods: !!m.planMeal?.items.length,
     planNotes: m.planMeal?.notes ?? null,
+    planned: (m.planMeal?.items ?? []).map((it) => ({
+      name: it.food.brand ? `${it.food.name} (${it.food.brand})` : it.food.name,
+      qty: it.qty,
+      unit: it.food.unit,
+      kcal: it.macros.kcal,
+    })),
     items: m.items,
     logged: m.logged,
     target: m.planMeal?.items.length ? m.planMeal.target : null,

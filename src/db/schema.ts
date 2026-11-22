@@ -92,9 +92,30 @@ export const checkins = pgTable(
     adherence: integer("adherence"), // 1-10
     notes: text("notes"),
     coachFeedback: text("coach_feedback"),
+    // Optional voice note (stored file) and video link (e.g. Loom) with the feedback.
+    feedbackAudioKey: text("feedback_audio_key"),
+    feedbackVideoUrl: text("feedback_video_url"),
+    feedbackAt: timestamp("feedback_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("checkins_client_date").on(t.clientId, t.date)],
+);
+
+// Replies under a check-in's feedback, from the client or the coach.
+export const checkinComments = pgTable(
+  "checkin_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    checkinId: uuid("checkin_id")
+      .notNull()
+      .references(() => checkins.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("checkin_comments_checkin").on(t.checkinId)],
 );
 
 export const photos = pgTable("photos", {
