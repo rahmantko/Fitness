@@ -228,7 +228,7 @@ function PhotoInput({ pose }: { pose: string }) {
       <input
         type="file"
         name={`photo_${pose}`}
-        accept="image/jpeg,image/png,image/webp,image/heic"
+        accept="image/jpeg,image/png,image/webp"
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];

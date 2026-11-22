@@ -2,6 +2,7 @@ import { getCheckins } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
 import { Card, Empty, inputCls } from "@/components/ui";
 import type { Checkin } from "@/db/schema";
+import { StoredImage } from "@/components/stored-image";
 
 const METRICS: { key: keyof Checkin; label: string; unit: string }[] = [
   { key: "weightKg", label: "Weight", unit: "kg" },
@@ -66,8 +67,7 @@ export default async function ComparePage({
                 <div className="grid grid-cols-2 gap-3">
                   {[pa, pb].map((p, i) =>
                     p ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={`/api/files/${p.fileKey}`} alt={`${pose} ${i ? "after" : "before"}`} className="aspect-[3/4] w-full rounded-xl object-cover" />
+                      <StoredImage key={i} fileKey={p.fileKey} alt={`${pose} ${i ? "after" : "before"}`} className="aspect-[3/4] w-full rounded-xl object-cover" />
                     ) : (
                       <div key={i} className="flex aspect-[3/4] items-center justify-center rounded-xl bg-surface-2 text-xs text-muted">
                         No photo

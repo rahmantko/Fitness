@@ -37,6 +37,14 @@ export default async function Home() {
           </div>
         </div>
 
+        {process.env.RAILWAY_ENVIRONMENT_NAME && !process.env.RAILWAY_VOLUME_MOUNT_PATH && (
+          <p className="rounded-xl border border-warn/40 bg-surface p-4 text-sm">
+            <strong className="text-warn">Storage not set up:</strong> photos and lab reports will be deleted whenever
+            the app updates. In Railway, right-click this app, choose <em>Attach volume</em>, and use the mount path{" "}
+            <code>/app/data</code>.
+          </p>
+        )}
+
         {roster.length === 0 ? (
           <Card>
             <Empty>

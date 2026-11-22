@@ -4,6 +4,7 @@ import { getCheckins } from "@/lib/queries";
 import { fmtDate, fmtDelta, fmtNum } from "@/lib/format";
 import { ButtonLink, Card, Empty } from "@/components/ui";
 import { FeedbackForm } from "@/components/forms";
+import { StoredImage } from "@/components/stored-image";
 
 export default async function CheckinsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,8 +62,7 @@ export default async function CheckinsPage({ params }: { params: Promise<{ id: s
               <div className="mt-3 flex gap-2">
                 {c.photos.map((p) => (
                   <a key={p.id} href={`/api/files/${p.fileKey}`} target="_blank" className="block w-20">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/api/files/${p.fileKey}`} alt={`${p.pose} photo`} className="aspect-[3/4] w-full rounded-lg object-cover" />
+                    <StoredImage fileKey={p.fileKey} alt={`${p.pose} photo`} className="aspect-[3/4] w-full rounded-lg object-cover" />
                     <span className="mt-0.5 block text-center text-xs capitalize text-muted">{p.pose}</span>
                   </a>
                 ))}

@@ -8,6 +8,13 @@ import { randomUUID } from "node:crypto";
 // Swap this module for Supabase Storage / S3 in production.
 const ROOT = path.join(process.cwd(), "data", "uploads");
 
+if (process.env.RAILWAY_ENVIRONMENT_NAME && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+  console.warn(
+    "WARNING: no Railway volume is attached. Uploaded photos and lab reports will be lost on every redeploy. " +
+      "Attach a volume to this service with mount path /app/data.",
+  );
+}
+
 const ALLOWED: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
