@@ -72,6 +72,7 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return { error: "Email or password is incorrect.", email };
   }
+  if (user.suspendedAt) return { error: "This account has been suspended. Contact your coach.", email };
   await createSession(user.id);
   redirect("/");
 }

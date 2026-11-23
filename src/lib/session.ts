@@ -44,7 +44,7 @@ export async function getCurrentUser(): Promise<User | null> {
     if (!payload.sub) return null;
     const db = await getDb();
     const [user] = await db.select().from(users).where(eq(users.id, payload.sub));
-    if (!user) return null;
+    if (!user || user.suspendedAt) return null;
     // A password change signs out every login made before it.
     if (user.passwordChangedAt && (payload.iat ?? 0) < Math.floor(user.passwordChangedAt.getTime() / 1000)) {
       return null;

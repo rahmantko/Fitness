@@ -34,6 +34,8 @@ export const users = pgTable("users", {
   dateOfBirth: date("date_of_birth", { mode: "string" }),
   heightCm: real("height_cm"),
   bio: text("bio"),
+  // Set by an admin to block logins without deleting anything.
+  suspendedAt: timestamp("suspended_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

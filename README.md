@@ -67,6 +67,13 @@ File storage writes to local disk (`src/lib/storage.ts`). On serverless hosting,
 
 Without either, reset emails are printed to the server log instead of sent. `APP_URL` (optional) sets the site address used in links; on Railway it's detected automatically.
 
+## Admin control centre
+
+Set `ADMIN_EMAILS` (comma separated) to the email(s) that should manage the whole app. Those
+accounts get an **Admin** button in the top bar that opens `/admin`: app-wide stats, every user
+(reset passwords, move clients between coaches, suspend, delete) and the food library.
+Everyone else gets "not found" at `/admin`.
+
 ## Locked out?
 
 If a coach forgets their password, run this where the app is deployed (on Railway: open the app service, then the **Console** tab):
